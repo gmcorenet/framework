@@ -1,0 +1,15 @@
+{
+    "name": "gmcorenet/framework",
+    "version": "1.0.0",
+    "description": "GMCore Framework - Core PHP framework",
+    "type": "library",
+    "license": "MIT",
+    "autoload": {
+        "psr-4": {
+            "GMCore\\": "src/"
+        }
+    },
+    "require": {
+        "php": ">=8.2"
+    }
+}

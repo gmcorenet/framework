@@ -27,7 +27,7 @@ func (m *Maker) MakeController(name string) error {
 import (
 	"net/http"
 
-	"github.com/gmcORE/framework/kernel"
+	"github.com/gmcorenet/framework/kernel"
 )
 
 type %sController struct {
@@ -185,7 +185,7 @@ func (m *Maker) MakeBundle(name string) error {
 	files := map[string]string{
 		"bundle.go": fmt.Sprintf(`package %s
 
-import "github.com/gmcORE/framework/kernel"
+import "github.com/gmcorenet/framework/kernel"
 
 type %sBundle struct{}
 
@@ -228,8 +228,8 @@ func (m *Maker) MakeCRUDController(name string) error {
 import (
 	"net/http"
 
-	"github.com/gmcORE/framework/kernel"
-	"github.com/gmcORE/framework/crud"
+	"github.com/gmcorenet/framework/kernel"
+	"github.com/gmcorenet/sdk/gmcore-crud"
 )
 
 type %sController struct {

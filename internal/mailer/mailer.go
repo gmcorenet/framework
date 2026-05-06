@@ -2,8 +2,8 @@ package mailer
 
 import (
 	"bytes"
-	"context"
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"net/smtp"
 )
@@ -178,28 +178,7 @@ func NewSendmailTransport(command string) *SendmailTransport {
 }
 
 func (t *SendmailTransport) Send(email *Email) error {
-	var msg bytes.Buffer
-
-	msg.WriteString(fmt.Sprintf("From: %s\r\n", formatMailbox(email.From)))
-	msg.WriteString(fmt.Sprintf("To: %s\r\n", formatMailboxes(email.To)))
-	if len(email.Cc) > 0 {
-		msg.WriteString(fmt.Sprintf("Cc: %s\r\n", formatMailboxes(email.Cc)))
-	}
-	msg.WriteString(fmt.Sprintf("Subject: %s\r\n", email.Subject))
-
-	if email.Html {
-		msg.WriteString("Content-Type: text/html; charset=utf-8\r\n")
-	} else {
-		msg.WriteString("Content-Type: text/plain; charset=utf-8\r\n")
-	}
-	msg.WriteString("\r\n")
-	msg.WriteString(email.Body)
-
-	return sendmail(t.command, []string{email.From.Address}, msg.Bytes())
-}
-
-func sendmail(command string, to []string, msg []byte) error {
-	return nil
+	return errors.New("sendmail transport is not supported in this environment")
 }
 
 type FileTransport struct {
@@ -211,8 +190,7 @@ func NewFileTransport(dir string) *FileTransport {
 }
 
 func (t *FileTransport) Send(email *Email) error {
-	filename := fmt.Sprintf("%s/%d_%s.eml", t.dir, email.Subject, email.To[0].Address)
-	return nil
+	return errors.New("file transport is not supported in this environment")
 }
 
 type MemoryTransport struct {

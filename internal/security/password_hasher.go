@@ -45,7 +45,7 @@ func NewPlainPasswordHasher() *PlainPasswordHasher {
 }
 
 func (p *PlainPasswordHasher) Hash(password string) (string, error) {
-	return password, nil
+	return "", fmt.Errorf("plaintext hasher cannot hash - use for verification only during migration")
 }
 
 func (p *PlainPasswordHasher) Verify(hashedPassword, plainPassword string) bool {

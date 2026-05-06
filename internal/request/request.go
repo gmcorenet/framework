@@ -115,7 +115,7 @@ func (r *Request) GetBasicAuth() (username, password string, ok bool) {
 		return "", "", false
 	}
 
-	username, password, ok = split2(payload, ":")
+	username, password, ok = split2(payload, ':')
 	return
 }
 

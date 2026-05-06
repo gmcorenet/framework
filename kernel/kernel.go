@@ -9,7 +9,13 @@ import (
 	"os/signal"
 	"syscall"
 	"time"
+
+	"github.com/gmcorenet/framework/container"
+	"github.com/gmcorenet/framework/events"
+	"github.com/gmcorenet/framework/router"
 )
+
+type HandlerFunc = router.Handler
 
 type Config struct {
 	Host       string
@@ -22,13 +28,13 @@ type Config struct {
 }
 
 type Kernel struct {
-	config      *Config
-	container   *Container
-	router      http.Handler
-	dispatcher  *EventDispatcher
-	eventManager *eventManager
-	bundles     []Bundler
-	mux         *http.ServeMux
+	config        *Config
+	container     *container.Container
+	routerHandler http.Handler
+	dispatcher    *events.EventDispatcher
+	eventManager  *eventManager
+	bundles       []Bundler
+	routeBuilder  *router.Router
 }
 
 func New(cfg *Config) *Kernel {
@@ -44,14 +50,13 @@ func New(cfg *Config) *Kernel {
 
 	k := &Kernel{
 		config:       cfg,
-		container:    NewContainer(),
-		dispatcher:   NewEventDispatcher(),
+		container:    container.NewContainer(),
+		dispatcher:   events.NewEventDispatcher(),
 		eventManager: newEventManager(),
 		bundles:      make([]Bundler, 0),
-		mux:          http.NewServeMux(),
+		routeBuilder: router.New(),
 	}
 
-	k.registerCoreServices()
 	return k
 }
 
@@ -66,7 +71,7 @@ func (k *Kernel) Bootstrap(ctx context.Context) error {
 		return fmt.Errorf("failed to load bundles: %w", err)
 	}
 
-	k.router = k.buildRouter()
+	k.routerHandler = k.buildRouter()
 	return nil
 }
 
@@ -81,34 +86,34 @@ func (k *Kernel) loadBundles(ctx context.Context) error {
 }
 
 func (k *Kernel) buildRouter() http.Handler {
-	return k.mux
+	return k.routeBuilder
 }
 
 func (k *Kernel) Mux() http.Handler {
-	return k.mux
+	return k.routerHandler
 }
 
 func (k *Kernel) Router() http.Handler {
-	return k.router
+	return k.routerHandler
 }
 
-func (k *Kernel) Container() *Container {
+func (k *Kernel) RouteBuilder() *router.Router {
+	return k.routeBuilder
+}
+
+func (k *Kernel) Container() *container.Container {
 	return k.container
 }
 
-func (k *Kernel) SetContainer(c *Container) {
+func (k *Kernel) SetContainer(c *container.Container) {
 	k.container = c
 }
 
 func (k *Kernel) SetRouter(r http.Handler) {
-	k.router = r
+	k.routerHandler = r
 }
 
-func (k *Kernel) SetMux(m *http.ServeMux) {
-	k.mux = m
-}
-
-func (k *Kernel) Dispatcher() *EventDispatcher {
+func (k *Kernel) Dispatcher() *events.EventDispatcher {
 	return k.dispatcher
 }
 
@@ -142,12 +147,40 @@ func (k *Kernel) RegisterDefaultServices() {
 	k.container.Set("event_manager", k.eventManager)
 }
 
-func (k *Kernel) Handle(pattern string, handler http.Handler) {
-	k.mux.Handle(pattern, handler)
+func (k *Kernel) GET(pattern string, handler HandlerFunc) (*router.Route, error) {
+	return k.routeBuilder.GET(pattern, handler)
 }
 
-func (k *Kernel) HandleFunc(pattern string, fn func(http.ResponseWriter, *http.Request)) {
-	k.mux.HandleFunc(pattern, fn)
+func (k *Kernel) POST(pattern string, handler HandlerFunc) (*router.Route, error) {
+	return k.routeBuilder.POST(pattern, handler)
+}
+
+func (k *Kernel) PUT(pattern string, handler HandlerFunc) (*router.Route, error) {
+	return k.routeBuilder.PUT(pattern, handler)
+}
+
+func (k *Kernel) DELETE(pattern string, handler HandlerFunc) (*router.Route, error) {
+	return k.routeBuilder.DELETE(pattern, handler)
+}
+
+func (k *Kernel) PATCH(pattern string, handler HandlerFunc) (*router.Route, error) {
+	return k.routeBuilder.PATCH(pattern, handler)
+}
+
+func (k *Kernel) Any(pattern string, handler HandlerFunc) (*router.Route, error) {
+	return k.routeBuilder.Any(pattern, handler)
+}
+
+func (k *Kernel) Match(methods []string, pattern string, handler HandlerFunc) (*router.Route, error) {
+	return k.routeBuilder.Match(methods, pattern, handler)
+}
+
+func (k *Kernel) Group(prefix string, callback func(*router.Router), middlewares ...router.Middleware) *router.Router {
+	return k.routeBuilder.Group(prefix, callback, middlewares...)
+}
+
+func (k *Kernel) Use(m router.Middleware) {
+	k.routeBuilder.Use(m)
 }
 
 func (k *Kernel) HandleRequest(w http.ResponseWriter, req *http.Request) {
@@ -157,7 +190,7 @@ func (k *Kernel) HandleRequest(w http.ResponseWriter, req *http.Request) {
 	event := NewKernelEvent(ctx, req, w)
 	k.dispatchKernelEvent(ctx, EventRequest, event)
 
-	k.router.ServeHTTP(w, req.WithContext(ctx))
+	k.routerHandler.ServeHTTP(w, req.WithContext(ctx))
 }
 
 func (k *Kernel) ServeHTTP(w http.ResponseWriter, req *http.Request) {
@@ -177,7 +210,7 @@ func (k *Kernel) Run() error {
 	addr := fmt.Sprintf("%s:%s", k.config.Host, k.config.Port)
 	srv := &http.Server{
 		Addr:    addr,
-		Handler: k.router,
+		Handler: k.routerHandler,
 	}
 
 	errCh := make(chan error, 1)
@@ -189,7 +222,7 @@ func (k *Kernel) Run() error {
 	}()
 
 	quit := make(chan os.Signal, 1)
-	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+	signal.Notify(quit, os.Interrupt, syscall.SIGTERM)
 
 	select {
 	case <-quit:

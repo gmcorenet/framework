@@ -3,6 +3,8 @@ package kernel
 import (
 	"context"
 	"net/http"
+
+	"github.com/gmcorenet/framework/container"
 )
 
 type Context struct {
@@ -24,7 +26,7 @@ func NewContext(ctx context.Context, w http.ResponseWriter, r *http.Request, k *
 	}
 }
 
-func (c *Context) Container() *Container {
+func (c *Context) Container() *container.Container {
 	return c.Kernel.Container()
 }
 

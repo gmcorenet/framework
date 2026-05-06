@@ -126,26 +126,29 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	methodMatched := false
 
 	for _, route := range r.routes {
+		matches := route.Pattern.FindStringSubmatch(path)
+		if matches == nil {
+			continue
+		}
+
 		if !r.matchesMethod(route, req.Method) {
 			methodMatched = true
 			continue
 		}
 
-		matches := route.Pattern.FindStringSubmatch(path)
-		if matches != nil {
-			params := r.extractParams(route.Pattern, path)
+		params := r.extractParams(route.Pattern, path)
 
-			finalHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				route.Handler(w, r, params)
-			})
+		finalHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			route.Handler(w, r, params)
+		})
 
-			for i := len(route.Middleware) - 1; i >= 0; i-- {
-				finalHandler = route.Middleware[i](finalHandler)
-			}
-
-			finalHandler.ServeHTTP(w, req)
-			return
+		var handler http.Handler = finalHandler
+		for i := len(route.Middleware) - 1; i >= 0; i-- {
+			handler = route.Middleware[i](handler)
 		}
+
+		handler.ServeHTTP(w, req)
+		return
 	}
 
 	if methodMatched && r.methodNotAllowed != nil {

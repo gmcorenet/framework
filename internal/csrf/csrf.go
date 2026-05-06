@@ -1,6 +1,7 @@
 package csrf
 
 import (
+	"context"
 	"crypto/hmac"
 	"crypto/rand"
 	"crypto/sha256"
@@ -9,7 +10,25 @@ import (
 	"net/http"
 	"sync"
 	"time"
+
+	"github.com/gmcorenet/framework/container"
+	"github.com/gmcorenet/framework/router"
+	"github.com/gmcorenet/framework/routing"
 )
+
+func init() {
+	routing.RegisterMiddlewareProvider(func(ctr *container.Container, r *router.Router) (func(http.Handler) http.Handler, bool) {
+		secret := "change-me"
+		if s, err := ctr.Get("csrf_secret"); err == nil {
+			if str, ok := s.(string); ok && str != "" {
+				secret = str
+			}
+		}
+		tm := NewTokenManager(secret)
+		mw := NewMiddleware(tm)
+		return mw.Handler, true
+	})
+}
 
 var (
 	ErrNoToken      = errors.New("csrf: token not found")
@@ -31,6 +50,7 @@ type TokenManager struct {
 	httpOnly     bool
 	sameSite     http.SameSite
 	stopCleanup  chan struct{}
+	maxCacheSize int
 }
 
 type tokenEntry struct {
@@ -40,15 +60,16 @@ type tokenEntry struct {
 
 func NewTokenManager(secret string) *TokenManager {
 	return &TokenManager{
-		secret:      []byte(secret),
-		sessionName: "_csrf_token",
-		cookieName:  "_csrf_cache",
-		tokenLength: 32,
-		tokenCache:  make(map[string]*tokenEntry),
-		lifetime:   time.Hour,
+		secret:       []byte(secret),
+		sessionName:  "_csrf_token",
+		cookieName:   "_csrf_cache",
+		tokenLength:  32,
+		tokenCache:   make(map[string]*tokenEntry),
+		lifetime:    time.Hour,
 		cookiePath:  "/",
-		httpOnly:   true,
+		httpOnly:    true,
 		sameSite:    http.SameSiteStrictMode,
+		maxCacheSize: 10000,
 	}
 }
 
@@ -106,6 +127,13 @@ func (tm *TokenManager) GenerateToken() (string, error) {
 	fullToken := token + "." + signature
 
 	tm.cacheMu.Lock()
+	if len(tm.tokenCache) >= tm.maxCacheSize {
+		tm.cleanupExpiredTokensLocked()
+		if len(tm.tokenCache) >= tm.maxCacheSize {
+			tm.cacheMu.Unlock()
+			return "", errors.New("csrf: token cache full")
+		}
+	}
 	tm.tokenCache[fullToken] = &tokenEntry{
 		token:     fullToken,
 		createdAt: time.Now(),
@@ -148,6 +176,7 @@ func (tm *TokenManager) ValidateToken(token string) error {
 		tm.cacheMu.Unlock()
 		return ErrInvalidToken
 	}
+	delete(tm.tokenCache, token)
 	tm.cacheMu.Unlock()
 
 	return nil
@@ -229,7 +258,10 @@ func (tm *TokenManager) ClearToken(w http.ResponseWriter, r *http.Request) {
 func (tm *TokenManager) CleanupExpiredTokens() {
 	tm.cacheMu.Lock()
 	defer tm.cacheMu.Unlock()
+	tm.cleanupExpiredTokensLocked()
+}
 
+func (tm *TokenManager) cleanupExpiredTokensLocked() {
 	now := time.Now()
 	for token, entry := range tm.tokenCache {
 		if now.Sub(entry.createdAt) > tm.lifetime {
@@ -238,7 +270,7 @@ func (tm *TokenManager) CleanupExpiredTokens() {
 	}
 }
 
-func (tm *TokenManager) StartCleanup(interval time.Duration) {
+func (tm *TokenManager) StartCleanup(ctx context.Context, interval time.Duration) {
 	tm.cacheMu.Lock()
 	if tm.stopCleanup != nil {
 		tm.cacheMu.Unlock()
@@ -256,12 +288,17 @@ func (tm *TokenManager) StartCleanup(interval time.Duration) {
 				tm.CleanupExpiredTokens()
 			case <-tm.stopCleanup:
 				return
+			case <-ctx.Done():
+				tm.StopCleanup()
+				return
 			}
 		}
 	}()
 }
 
 func (tm *TokenManager) StopCleanup() {
+	tm.cacheMu.Lock()
+	defer tm.cacheMu.Unlock()
 	if tm.stopCleanup != nil {
 		close(tm.stopCleanup)
 		tm.stopCleanup = nil

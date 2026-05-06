@@ -12,6 +12,7 @@ type RoleHierarchy interface {
 
 type UserInterface interface {
 	GetIdentifier() interface{}
+	GetPassword() string
 	GetRoles() []string
 	IsEqual(user UserInterface) bool
 	EraseCredentials()
@@ -23,7 +24,6 @@ type Role interface {
 
 type AdvancedUserInterface interface {
 	UserInterface
-	IsEqual(user AdvancedUserInterface) bool
 	IsAccountNonExpired() bool
 	IsAccountNonLocked() bool
 	IsCredentialsNonExpired() bool

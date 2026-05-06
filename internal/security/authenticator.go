@@ -93,37 +93,37 @@ func (p *UserProvider) GetUsers() map[string]UserInterface {
 	return result
 }
 
-type User struct {
+type BasicUser struct {
 	identifier interface{}
 	roles      []string
 	password   string
 }
 
-func NewUser(identifier interface{}, password string, roles []string) *User {
-	return &User{
+func NewUser(identifier interface{}, password string, roles []string) *BasicUser {
+	return &BasicUser{
 		identifier: identifier,
 		password:   password,
 		roles:      roles,
 	}
 }
 
-func (u *User) GetIdentifier() interface{} {
+func (u *BasicUser) GetIdentifier() interface{} {
 	return u.identifier
 }
 
-func (u *User) GetRoles() []string {
+func (u *BasicUser) GetRoles() []string {
 	return u.roles
 }
 
-func (u *User) GetPassword() string {
+func (u *BasicUser) GetPassword() string {
 	return u.password
 }
 
-func (u *User) EraseCredentials() {
+func (u *BasicUser) EraseCredentials() {
 	u.password = ""
 }
 
-func (u *User) IsEqual(user UserInterface) bool {
+func (u *BasicUser) IsEqual(user UserInterface) bool {
 	return u.GetIdentifier() == user.GetIdentifier()
 }
 

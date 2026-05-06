@@ -46,8 +46,8 @@ func (r *Resolver) Resolve(controllerName, method string, w http.ResponseWriter,
 		ctrlType = reflect.PtrTo(ctrlType)
 	}
 
-	methodVal := ctrlType.MethodByName(method)
-	if !methodVal.IsValid() {
+	methodVal, ok := ctrlType.MethodByName(method)
+	if !ok {
 		return fmt.Errorf("method not found: %s on controller %s", method, controllerName)
 	}
 
@@ -62,7 +62,8 @@ func (r *Resolver) Resolve(controllerName, method string, w http.ResponseWriter,
 		return fmt.Errorf("failed to resolve arguments for %s.%s: %w", controllerName, method, err)
 	}
 
-	results := methodVal.Func.Call(arguments)
+	allArgs := append([]reflect.Value{reflect.ValueOf(ctrl)}, arguments...)
+	results := methodVal.Func.Call(allArgs)
 
 	if len(results) > 0 {
 		if lastErr, ok := results[len(results)-1].Interface().(error); ok && lastErr != nil {

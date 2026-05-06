@@ -44,7 +44,7 @@ func (r *ArgumentResolver) resolveArgument(argType reflect.Type, ctx context.Con
 	case reflect.TypeOf((*context.Context)(nil)):
 		return reflect.ValueOf(ctx), nil
 	case reflect.TypeOf(""):
-		if param := ctx.Value("params").(map[string]string); param != nil {
+		if param, ok := ctx.Value("params").(map[string]string); ok && param != nil {
 			return reflect.ValueOf(params), nil
 		}
 		return reflect.ValueOf(""), nil
@@ -92,7 +92,7 @@ func (r *ArgumentResolver) resolveStruct(argType reflect.Type, req *http.Request
 
 		var value string
 		if pathTag != "" {
-			if params := req.Context().Value("params").(map[string]string); params != nil {
+			if params, ok := req.Context().Value("params").(map[string]string); ok && params != nil {
 				value = params[fieldName]
 			}
 		} else if formTag != "" {

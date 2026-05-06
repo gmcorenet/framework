@@ -257,7 +257,10 @@ func StartSpan(ctx context.Context, name string) (context.Context, func()) {
 		return ctx, func() {}
 	}
 
-	id := ctx.Value("request_id").(uint64)
+	id, ok := ctx.Value("request_id").(uint64)
+	if !ok {
+		return ctx, func() {}
+	}
 	start := time.Now()
 
 	return ctx, func() {

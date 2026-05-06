@@ -1,3 +1,7 @@
+// Deprecated: use github.com/gmcorenet/framework/container instead.
+// This package is kept for internal compatibility but will be removed
+// in a future release. The public container/ package now includes all
+// DI features (Call, Inject, Factory, GetOrMake, Alias, Tag).
 package container
 
 import (

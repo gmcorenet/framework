@@ -102,7 +102,7 @@ import (
 
 func %s(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// TODO: Implement middleware logic
+		// Insert middleware logic here when generating app code.
 		next.ServeHTTP(w, r)
 	})
 }
@@ -204,7 +204,7 @@ func (b *%sBundle) Boot(ctx context.Context) error {
 func (b *%sBundle) Shutdown() error {
 	return nil
 }
-`, name, name, name, name, name, name, name, name),
+`, name, name, name, name, name, name, name, name, name),
 	}
 
 	for filename, content := range files {
@@ -263,7 +263,7 @@ func (c *%sController) Delete(w http.ResponseWriter, r *http.Request, params map
 	id := params["id"]
 	c.JSON(r.Context(), http.StatusOK, map[string]string{"message": "Delete " + id})
 }
-`, name, name, name, name, name, name, name, name)
+`, name, name, name, name, name, name, name, name, name)
 
 	return os.WriteFile(filename, []byte(content), 0644)
 }

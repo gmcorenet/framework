@@ -147,7 +147,11 @@ func (c *ArrayCache) DeleteItems(keys []string) bool {
 func (c *ArrayCache) Save(item CacheItemInterface) bool {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	c.items[item.GetKey()] = item.(*CacheItem)
+	ci, ok := item.(*CacheItem)
+	if !ok {
+		return false
+	}
+	c.items[item.GetKey()] = ci
 	return true
 }
 

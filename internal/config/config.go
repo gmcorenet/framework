@@ -5,18 +5,22 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 )
 
 type Config struct {
 	data map[string]interface{}
 }
 
-var instance *Config
+var (
+	instance *Config
+	once     sync.Once
+)
 
 func GetInstance() *Config {
-	if instance == nil {
+	once.Do(func() {
 		instance = &Config{data: make(map[string]interface{})}
-	}
+	})
 	return instance
 }
 
@@ -30,7 +34,11 @@ func (c *Config) Load(path string) *Config {
 		entries, _ := os.ReadDir(path)
 		for _, entry := range entries {
 			if !entry.IsDir() {
-				c.loadFile(filepath.Join(path, entry.Name()))
+				resolved := filepath.Join(path, entry.Name())
+				if !strings.HasPrefix(filepath.Clean(resolved), filepath.Clean(path)+string(os.PathSeparator)) && filepath.Clean(resolved) != filepath.Clean(path) {
+					continue
+				}
+				c.loadFile(resolved)
 			}
 		}
 	} else {
@@ -72,7 +80,7 @@ func parseJsonFile(path string) map[string]interface{} {
 
 func (c *Config) Get(key string) interface{} {
 	keys := strings.Split(key, ".")
-	value := c.data
+	var value interface{} = c.data
 
 	for _, k := range keys {
 		if m, ok := value.(map[string]interface{}); ok {
@@ -93,7 +101,13 @@ func (c *Config) Set(key string, value interface{}) *Config {
 		if _, ok := m[keys[i]]; !ok {
 			m[keys[i]] = make(map[string]interface{})
 		}
-		m = m[keys[i]].(map[string]interface{})
+		if nested, ok := m[keys[i]].(map[string]interface{}); ok {
+			m = nested
+		} else {
+			newMap := make(map[string]interface{})
+			m[keys[i]] = newMap
+			m = newMap
+		}
 	}
 
 	m[keys[len(keys)-1]] = value

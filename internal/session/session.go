@@ -8,7 +8,20 @@ import (
 	"net/http"
 	"sync"
 	"time"
+
+	"github.com/gmcorenet/framework/container"
+	"github.com/gmcorenet/framework/router"
+	"github.com/gmcorenet/framework/routing"
 )
+
+func init() {
+	routing.RegisterMiddlewareProvider(func(ctr *container.Container, r *router.Router) (func(http.Handler) http.Handler, bool) {
+		store := NewSessionStore(time.Hour)
+		manager := NewManager(store, "gmcore_session", 24*time.Hour)
+		mw := NewMiddleware(manager)
+		return mw.Handler, true
+	})
+}
 
 type Session interface {
 	ID() string
@@ -52,6 +65,8 @@ func (s *SessionStore) New(sid string) (Session, error) {
 	return ss, nil
 }
 
+var ErrSessionNotFound = errors.New("session not found")
+
 func (s *SessionStore) Get(sid string) (Session, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -59,7 +74,7 @@ func (s *SessionStore) Get(sid string) (Session, error) {
 	if sess, ok := s.sessions[sid]; ok {
 		return sess, nil
 	}
-	return nil, nil
+	return nil, ErrSessionNotFound
 }
 
 func (s *SessionStore) Save(session Session) error {
@@ -303,6 +318,10 @@ func (m *Manager) Start(w http.ResponseWriter, r *http.Request) (Session, error)
 
 	session, err := m.store.Get(sid)
 	if err != nil || session == nil {
+		sid, err = m.generateSid()
+		if err != nil {
+			return nil, err
+		}
 		session, err = m.store.New(sid)
 		if err != nil {
 			return nil, err

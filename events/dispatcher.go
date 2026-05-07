@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"sync"
 
-	gmcore_events "github.com/gmcorenet/sdk/gmcore-events"
+	gmcore_events "github.com/gmcorenet/sdk-gmcore-events"
 )
 
 type Event = interface{}

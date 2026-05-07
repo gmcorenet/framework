@@ -229,7 +229,7 @@ import (
 	"net/http"
 
 	"github.com/gmcorenet/framework/kernel"
-	"github.com/gmcorenet/sdk/gmcore-crud"
+	"github.com/gmcorenet/sdk-gmcore-crud"
 )
 
 type %sController struct {

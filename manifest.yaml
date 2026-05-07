@@ -1,0 +1,4 @@
+name: framework
+version: 1.0.0
+type: framework
+description: GMCore framework — Symfony-like foundation for Go with kernel, routing, container, events, session, CSRF, security

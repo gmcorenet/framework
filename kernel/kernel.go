@@ -2,17 +2,21 @@ package kernel
 
 import (
 	"context"
+	"crypto/tls"
 	"fmt"
 	"log"
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
+	"runtime"
 	"syscall"
 	"time"
 
 	"github.com/gmcorenet/framework/container"
 	"github.com/gmcorenet/framework/events"
 	"github.com/gmcorenet/framework/router"
+	"gopkg.in/yaml.v3"
 )
 
 type HandlerFunc = router.Handler
@@ -206,17 +210,71 @@ func (k *Kernel) Shutdown() {
 	}
 }
 
-func (k *Kernel) Run() error {
+func (k *Kernel) RunServer() *http.Server {
 	addr := fmt.Sprintf("%s:%s", k.config.Host, k.config.Port)
-	srv := &http.Server{
-		Addr:    addr,
-		Handler: k.routerHandler,
+
+	k.ensureWelcomePage()
+	k.ensureHealthEndpoint()
+
+	k.routerHandler = k.buildRouter()
+
+	certFile := filepath.Join(k.config.RootPath, "var", "keys", "cert.pem")
+	keyFile := filepath.Join(k.config.RootPath, "var", "keys", "key.pem")
+
+	if _, err := os.Stat(certFile); err == nil {
+		if _, err := os.Stat(keyFile); err == nil {
+			tlsCfg, err := loadTLSConfig(certFile, keyFile)
+			if err == nil {
+				return &http.Server{
+					Addr:      addr,
+					Handler:   k,
+					TLSConfig: tlsCfg,
+				}
+			}
+		}
 	}
+
+	return &http.Server{
+		Addr:    addr,
+		Handler: k,
+	}
+}
+
+func loadTLSConfig(certFile, keyFile string) (*tls.Config, error) {
+	cert, err := tls.LoadX509KeyPair(certFile, keyFile)
+	if err != nil {
+		return nil, err
+	}
+	return &tls.Config{Certificates: []tls.Certificate{cert}}, nil
+}
+
+func (k *Kernel) ensureWelcomePage() {
+	k.GET("/", func(w http.ResponseWriter, r *http.Request, params map[string]string) {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		w.Write([]byte(k.welcomeHTML()))
+	})
+}
+
+func (k *Kernel) ensureHealthEndpoint() {
+	k.GET("/health", func(w http.ResponseWriter, r *http.Request, params map[string]string) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`{"status":"ok"}`))
+	})
+}
+
+func (k *Kernel) Run() error {
+	srv := k.RunServer()
 
 	errCh := make(chan error, 1)
 	go func() {
-		log.Printf("Server starting on %s", addr)
-		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+		log.Printf("Server starting on %s", srv.Addr)
+		var err error
+		if srv.TLSConfig != nil {
+			err = srv.ListenAndServeTLS("", "")
+		} else {
+			err = srv.ListenAndServe()
+		}
+		if err != nil && err != http.ErrServerClosed {
 			errCh <- fmt.Errorf("server error: %v", err)
 		}
 	}()
@@ -236,6 +294,50 @@ func (k *Kernel) Run() error {
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	return srv.Shutdown(shutdownCtx)
+}
+
+func (k *Kernel) welcomeHTML() string {
+	appName := "GMCore"
+	appVersion := ""
+	if data, err := os.ReadFile(filepath.Join(k.config.RootPath, "manifest.yaml")); err == nil {
+		var mf struct {
+			Name    string `yaml:"name"`
+			Version string `yaml:"version"`
+		}
+		if yaml.Unmarshal(data, &mf) == nil {
+			if mf.Name != "" {
+				appName = mf.Name
+			}
+			if mf.Version != "" {
+				appVersion = mf.Version
+			}
+		}
+	}
+	if appVersion != "" {
+		appVersion = "v" + appVersion
+	} else {
+		appVersion = "v1.0.0"
+	}
+
+	return `<!DOCTYPE html><html lang="en">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>` + appName + `</title>
+<style>*{margin:0;padding:0;box-sizing:border-box}
+body{background:#1a1a2e;color:#e0e0e0;font:16px/1.6 system-ui,sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh}
+.card{background:#16213e;border-radius:16px;padding:48px;max-width:600px;width:90%;text-align:center;box-shadow:0 20px 60px rgba(0,0,0,.3)}
+h1{font-size:2.2em;color:#e94560;margin-bottom:8px}
+.version{color:#888;font-size:.9em;margin-bottom:24px}
+.info{display:grid;grid-template-columns:1fr 1fr;gap:12px;text-align:left;margin-top:24px}
+.info div{background:#0f3460;padding:12px 16px;border-radius:8px}
+.info strong{color:#e94560;display:block;font-size:.8em;text-transform:uppercase;margin-bottom:4px}
+.info span{color:#ccc}
+.footer{margin-top:32px;color:#555;font-size:.8em}
+</style></head><body><div class="card">
+<h1>🚀 ` + appName + `</h1><p class="version">` + appVersion + ` — ` + k.config.Env + ` mode</p>
+<p>Welcome to GMCore. Create your first controller to replace this page.</p>
+<div class="info"><div><strong>Go</strong><span>` + runtime.Version() + `</span></div>
+<div><strong>OS</strong><span>` + runtime.GOOS + `/` + runtime.GOARCH + `</span></div></div>
+<p class="footer">GMCore Framework</p></div></body></html>`
 }
 
 type Bundler interface {
